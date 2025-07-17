@@ -1,1 +1,1 @@
-"# ai-quiz-generator" 
+"ai-quiz-generator" 
