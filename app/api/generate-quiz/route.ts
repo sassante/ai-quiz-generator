@@ -1,48 +1,44 @@
-import { generateText } from "ai"
-import { openai } from "@ai-sdk/openai"
+import { gateway, generateText } from "ai"
 
-export async function POST(req: Request) {
+const MAX_INPUT_LENGTH = 60_000
+
+export async function POST(request: Request) {
   try {
-    const { input, numQuestions } = await req.json()
+    const body: unknown = await request.json()
+    if (!body || typeof body !== "object") {
+      return Response.json({ error: "Please add study material before generating." }, { status: 400 })
+    }
 
-    if (!input || !numQuestions) {
-      return Response.json({ error: "Input and number of questions are required" }, { status: 400 })
+    const { input, numQuestions } = body as { input?: unknown; numQuestions?: unknown }
+    if (typeof input !== "string" || !input.trim()) {
+      return Response.json({ error: "Please add study material before generating." }, { status: 400 })
+    }
+    if (input.length > MAX_INPUT_LENGTH) {
+      return Response.json({ error: "Your study material is too long. Please use 60,000 characters or fewer." }, { status: 413 })
+    }
+    if (typeof numQuestions !== "number" || !Number.isInteger(numQuestions) || numQuestions < 5 || numQuestions > 20) {
+      return Response.json({ error: "Choose between 5 and 20 quiz questions." }, { status: 400 })
     }
 
     const { text } = await generateText({
-      model: openai("gpt-4o"),
-      system: `You are an expert quiz generator. Your job is to create educational quizzes based on study notes or topics provided by students.
-
-INSTRUCTIONS:
-1. Generate exactly ${numQuestions} questions based on the provided content
-2. Mix question types: approximately 60% multiple-choice and 40% short-answer
-3. For multiple-choice questions:
-   - Provide exactly 4 options labeled A, B, C, D
-   - Make sure only one answer is clearly correct
-   - Include plausible but incorrect distractors
-4. For short-answer questions:
-   - Ask for specific facts, definitions, or brief explanations
-   - Provide the expected answer
-5. Create an answer key at the end listing all correct answers
-6. Format everything in clean Markdown
-
-FORMATTING REQUIREMENTS:
-- Start with "# Quiz" as the main heading
-- Number each question (1., 2., 3., etc.)
-- For multiple-choice: list options as A) B) C) D)
-- End with "## Answer Key" section
-- Use clear, professional language
-- Ensure questions test understanding, not just memorization`,
-      prompt: `Create a ${numQuestions}-question quiz based on the following content:
-
-${input}
-
-Generate a well-structured quiz that tests key concepts and understanding of this material.`,
+      model: gateway("google/gemini-3-flash"),
+      system: `You are a careful, encouraging study coach. Base every detail only on the provided source. Create a concise study guide and an accurate quiz. Return only valid JSON with this exact shape: {"notes":"markdown string","quiz":"markdown string"}. In notes, include a descriptive heading, a brief overview, and 4-7 key takeaways or terms. In quiz, create exactly ${numQuestions} numbered questions; use a mix of multiple-choice (four options, one correct) and short-answer prompts, and finish with a clearly separated answer key. Do not invent facts not supported by the source. Keep explanations concise.`,
+      prompt: `Create study notes and a ${numQuestions}-question quiz from this source material:\n\n${input.trim()}`,
+      maxOutputTokens: 5000,
     })
 
-    return Response.json({ quiz: text })
+    const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "")
+    const generated: unknown = JSON.parse(cleaned)
+    if (!generated || typeof generated !== "object" || typeof (generated as { notes?: unknown }).notes !== "string" || typeof (generated as { quiz?: unknown }).quiz !== "string") {
+      throw new Error("The model returned an invalid study set")
+    }
+
+    return Response.json({ notes: (generated as { notes: string }).notes, quiz: (generated as { quiz: string }).quiz })
   } catch (error) {
-    console.error("Error generating quiz:", error)
-    return Response.json({ error: "Failed to generate quiz" }, { status: 500 })
+    console.error("Study set generation failed:", error)
+    if (error instanceof Error && error.message.includes("valid credit card on file")) {
+      return Response.json({ error: "AI Gateway billing is required before this app can generate a study set.", code: "AI_GATEWAY_BILLING_REQUIRED" }, { status: 503 })
+    }
+    return Response.json({ error: "We couldn’t create your study set right now. Please try again." }, { status: 500 })
   }
 }

@@ -2,9 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Ai Quiz Generator',
-  description: '',
-  generator: ' ',
+  title: 'Studywise — Your AI Study Partner',
+  description: 'Turn class notes, PDFs, and documents into clear study guides and custom practice quizzes with AI.',
 }
 
 export default function RootLayout({
