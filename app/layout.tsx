@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Studywise — Your AI Study Partner',
-  description: 'Turn class notes, PDFs, and documents into clear study guides and custom practice quizzes with AI.',
+  title: 'Fieldnotes — Study Desk',
+  description: 'Turn your notes, readings, and class materials into focused study notes and practice questions.',
 }
 
 export default function RootLayout({
